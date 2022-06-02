@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Domains.Entities;
 using Domains.Extensions;
 using Services.Interfaces;
@@ -30,39 +31,70 @@ public class CurrencyConvertor : ICurrencyConvertor
     public void UpdateConfiguration(IEnumerable<Tuple<string, string, double>> conversionRates)
     {
         foreach (var conversionRate in conversionRates)
-        {
-            UpdateDatabase(conversionRate);
+            UpdateConfiguration(conversionRate);
+    }
 
-            if (_currenciesRatesGraph.ContainsKey(conversionRate.Item1) is false)
-                _currenciesRatesGraph[conversionRate.Item1] = new List<string>();
+    private void UpdateConfiguration(Tuple<string, string, double> conversionRate)
+    {
+        UpdateDatabase(conversionRate);
 
-            if (_currenciesRatesGraph.ContainsKey(conversionRate.Item2) is false)
-                _currenciesRatesGraph[conversionRate.Item2] = new List<string>();
+        if (_currenciesRatesGraph.ContainsKey(conversionRate.Item1) is false)
+            _currenciesRatesGraph[conversionRate.Item1] = new List<string>();
 
-            if (_currenciesRatesGraph[conversionRate.Item1].Any(x => x == conversionRate.Item2) is false)
-                _currenciesRatesGraph[conversionRate.Item1].Add(conversionRate.Item2);
+        if (_currenciesRatesGraph.ContainsKey(conversionRate.Item2) is false)
+            _currenciesRatesGraph[conversionRate.Item2] = new List<string>();
 
-            if (_currenciesRatesGraph[conversionRate.Item2].Any(x => x == conversionRate.Item1) is false)
-                _currenciesRatesGraph[conversionRate.Item2].Add(conversionRate.Item1);
-        }
+        if (_currenciesRatesGraph[conversionRate.Item1].Any(x => x == conversionRate.Item2) is false)
+            _currenciesRatesGraph[conversionRate.Item1].Add(conversionRate.Item2);
+
+        if (_currenciesRatesGraph[conversionRate.Item2].Any(x => x == conversionRate.Item1) is false)
+            _currenciesRatesGraph[conversionRate.Item2].Add(conversionRate.Item1);
     }
 
     /// <summary>
     /// Converts the specified amount to the desired currency.
     /// </summary>
-    public double Convert(string fromCurrency, string toCurrency, double amount)
+    public double Convert(string baseCurrency, string targetCurrency, double amount)
     {
         if (_currenciesRatesGraph.Count == 0)
             return 0;
         
         var exchangeRate = NavigateGraphToFindExchangeRate(
-            baseCurrency: fromCurrency,
-            targetCurrency: toCurrency,
+            baseCurrency,
+            targetCurrency,
             exceptionTargetCurrencies: new List<string>());
+
+        var isCurrencyExchangeRateInDatabase = IsCurrencyExchangeRateInDatabase(
+            baseCurrency, 
+            targetCurrency, 
+            exchangeRate);
+
+        if (isCurrencyExchangeRateInDatabase) 
+            return amount * exchangeRate;
+        
+        var conversionRate = new Tuple<string, string, double>(
+            baseCurrency, 
+            targetCurrency, 
+            exchangeRate);
+            
+        UpdateConfiguration(conversionRate);
 
         return amount * exchangeRate;
     }
 
+    private bool IsCurrencyExchangeRateInDatabase(
+        string baseCurrency, 
+        string targetCurrency, 
+        double rate)
+    {
+        Func<CurrenciesRate, bool> predicate = x =>
+            x.BaseCurrency == baseCurrency &&
+            x.TargetCurrency == targetCurrency &&
+            x.Rate.CompareTo(rate) == 0;
+
+        return _currenciesRates.Any(predicate);
+    }
+    
     /// <summary>
     /// Update database records
     /// </summary>

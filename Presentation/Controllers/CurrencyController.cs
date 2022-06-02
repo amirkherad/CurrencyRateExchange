@@ -25,8 +25,8 @@ public class CurrencyController : ControllerBase
         double amount)
     {
         var convertedAmount = _currencyConvertor.Convert(
-            fromCurrency: baseCurrency, 
-            toCurrency: targetCurrency, 
+            baseCurrency: baseCurrency, 
+            targetCurrency: targetCurrency, 
             amount);
 
         return new CurrencyExchangeRateResponse(convertedAmount);
